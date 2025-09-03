@@ -1,6 +1,4 @@
-use std::path::PathBuf;
 
-use crate::index::IndexImp;
 // A request to get entry by Locator
 pub struct GetRequest {
     pub key: String,

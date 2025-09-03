@@ -1,4 +1,3 @@
-use crate::index;
 use crate::repo;
 use crate::repo::GetRequest;
 use crate::repo::PutRequest;
