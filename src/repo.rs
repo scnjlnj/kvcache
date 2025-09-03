@@ -22,7 +22,7 @@ pub trait Repo {
     fn put(&mut self, req: PutRequest) -> bool;
 
     // Get a value from the repository using a locator
-    fn get(&self, req: GetRequest) -> Option<String>;
+    fn get(&mut self, req: GetRequest) -> Option<String>;
 
     // Delete a key-value pair from the repository
     fn del(&mut self, req: DelRequest) -> bool;

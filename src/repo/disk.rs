@@ -3,11 +3,11 @@ use crate::index::IndexImp;
 use crate::index::hash::HashIndex;
 use std::{
     fs::File,
-    io::{BufWriter, Seek, Write},
+    io::{BufWriter, Read, Seek, SeekFrom, Write},
     path::PathBuf,
 };
 pub type Result<T> = std::result::Result<T, Box<std::io::Error>>;
-struct DiskRepo {
+pub struct DiskRepo {
     path: PathBuf,
     file: File,
     index: Box<dyn IndexImp>,
@@ -30,7 +30,7 @@ impl DiskRepo {
 
         // Convert key length and value length to bytes and append
         let key_len = key.len() as u32;
-        let value_len = value.len() as u32;
+        let value_len = value.len() as i32;
         entry.extend_from_slice(&key_len.to_le_bytes());
         entry.extend_from_slice(&value_len.to_le_bytes());
 
@@ -40,14 +40,53 @@ impl DiskRepo {
 
         entry
     }
-    fn write_entry(&mut self, key: &String, value: &String) -> Result<(u64, u32)> {
-        // entry struct key.len()+value.len()+key+val
-        let entry = self.format_entry(key, value);
-        let offset = self.file.seek(std::io::SeekFrom::End(0))?;
+    fn format_delete_entry(&self, key: &String) -> Vec<u8> {
+        let mut entry = Vec::new();
+
+        // Convert key length and value length to bytes and append
+        let key_len = key.len() as u32;
+        let value_len = -1 as i32;
+        entry.extend_from_slice(&key_len.to_le_bytes());
+        entry.extend_from_slice(&value_len.to_le_bytes());
+        entry.extend_from_slice(key.as_bytes());
+        entry
+    }
+    fn write_entry(
+        &mut self,
+        key: &String,
+        value: &String,
+        delete_mark: bool,
+    ) -> Result<(u64, u32)> {
+        let entry: Vec<u8>;
+        match delete_mark {
+            false => {
+                // write delete entry
+                entry = self.format_entry(key, value);
+            }
+            true => {
+                // entry struct key.len()+value.len()+key+val
+                entry = self.format_delete_entry(key);
+            }
+        }
+        let offset = self.file.seek(SeekFrom::End(0))?;
         let mut writer = BufWriter::with_capacity(entry.len(), &mut self.file);
+        println!("write entry: {:?}", entry);
         writer.write_all(&entry)?;
         writer.flush()?;
         Ok((offset, entry.len() as u32))
+    }
+    fn get_value_from_entry(&mut self, key: &String, offset: u64, length: u32) -> Result<String> {
+        let mut entry = Vec::<u8>::with_capacity(length as usize);
+        self.file.seek(SeekFrom::Start(offset))?;
+        self.file.read_exact(&mut entry)?;
+        println!("get entry: {:?}", entry);
+        let value_len = i32::from_le_bytes(entry[4..8].try_into().unwrap());
+        if value_len == -1 {
+            return Ok("!Deleted".to_string());
+        }
+        // Todo assert entry[8..8+keylength] is key.as_bytes()
+        let value_offset = length - 8 - u32::from_le_bytes(entry[4..8].try_into().unwrap());
+        Ok(String::from_utf8_lossy(&entry[value_offset as usize..]).to_string())
     }
 }
 
@@ -55,10 +94,10 @@ impl Repo for DiskRepo {
     fn del(&mut self, req: DelRequest) -> bool {
         // 插入一条特殊记录标记为已删除
         let delete_marker = String::new(); // 使用空字符串作为删除标记
-        match self.write_entry(&req.key, &delete_marker) {
-            Ok((offset, entry_length)) => {
+        match self.write_entry(&req.key, &delete_marker, true) {
+            Ok(_) => {
                 // 更新索引，标记删除
-                self.index.update(&req.key, offset, entry_length);
+                self.index.unset(&req.key);
                 println!("Key '{}' marked as deleted.", req.key);
                 true
             }
@@ -69,29 +108,11 @@ impl Repo for DiskRepo {
         }
     }
 
-    fn get(&self, req: GetRequest) -> Option<String> {
+    fn get(&mut self, req: GetRequest) -> Option<String> {
         // 从索引中查找键的偏移量和长度
         if let Some((offset, length)) = self.index.get(&req.key) {
-            let mut buffer = vec![0; length as usize];
-            if let Ok(_) = self.file.seek(std::io::SeekFrom::Start(offset)) {
-                if let Ok(_) = self.file.read_exact(&mut buffer) {
-                    // 跳过 key 长度和 value 长度字段，直接读取 value
-                    let key_len = u32::from_le_bytes(buffer[0..4].try_into().unwrap()) as usize;
-                    let value_len = u32::from_le_bytes(buffer[4..8].try_into().unwrap()) as usize;
-                    let value_start = 8 + key_len;
-                    let value_end = value_start + value_len;
-                    if value_end <= buffer.len() {
-                        let value =
-                            String::from_utf8_lossy(&buffer[value_start..value_end]).to_string();
-                        // 如果值为空字符串，表示已删除
-                        if value.is_empty() {
-                            println!("Key '{}' is marked as deleted.", req.key);
-                            return None;
-                        }
-                        return Some(value);
-                    }
-                }
-            }
+            println!("offset:{},length:{}", offset, length);
+            self.get_value_from_entry(&req.key, offset, length).ok();
         }
         None
     }
@@ -101,9 +122,9 @@ impl Repo for DiskRepo {
         let Some(value_bor) = &req.value else {
             return false;
         };
-        match self.write_entry(key_bor, &value_bor) {
+        match self.write_entry(key_bor, &value_bor, false) {
             Ok((offset, entry_length)) => {
-                self.index.update(key_bor, offset, entry_length);
+                self.index.set(key_bor, offset, entry_length);
                 return true;
             }
             Err(e) => {

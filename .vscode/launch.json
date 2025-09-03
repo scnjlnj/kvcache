@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug cargo test",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--lib"
+                ]
+            },
+            "program": "${cargo:program}",
+            "args": [
+                "--nocapture",
+                "test_repo_disk"
+            ],
+            "cwd": "${workspaceFolder}",
+            "sourceLanguages": [
+                "rust"
+            ]
+        }
+    ]
+}
