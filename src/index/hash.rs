@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::index::IndexImp;
 
 pub struct HashIndex {
-    data: HashMap<String, String>,
+    data: HashMap<String, (u64, u32)>,
 }
 impl HashIndex {
     pub fn new(cap: usize) -> Self {
@@ -18,7 +18,11 @@ impl IndexImp for HashIndex {
     where
         Self: Sized,
     {
-        let data = repo.iter_all().collect::<HashMap<String, String>>();
+        let data = repo.iter_all().collect::<HashMap<String, (u64, u32)>>();
         Self { data }
+    }
+    fn update(&mut self, key: &String, offset: u64, entry_len: u32) -> bool {
+        self.data.insert(key.clone(), (offset, entry_len));
+        return true;
     }
 }

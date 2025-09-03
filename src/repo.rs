@@ -19,16 +19,15 @@ pub trait Locator {}
 
 pub trait Repo {
     // Put a key-value pair into the repository
-    fn put(&self, req: PutRequest) -> bool;
+    fn put(&mut self, req: PutRequest) -> bool;
 
     // Get a value from the repository using a locator
     fn get(&self, req: GetRequest) -> Option<String>;
 
     // Delete a key-value pair from the repository
-    fn del(&self, req: DelRequest) -> bool;
-
-    fn iter_all(&self) -> impl IntoIterator<Item = (String, String)> {
-        Vec::<(String, String)>::new()
+    fn del(&mut self, req: DelRequest) -> bool;
+    fn iter_all(&self) -> Box<dyn Iterator<Item = (String, (u64, u32))>> {
+        Box::new(Vec::<(String, (u64, u32))>::new().into_iter())
     }
 }
 
