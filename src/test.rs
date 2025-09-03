@@ -32,7 +32,7 @@ fn test_repo_disk_2() {
         .take(500)
         .copied()
         .filter_map(|s| {
-            // split_once 返回 Option<(&str, &str)>
+            // split_once ==> Option<(&str, &str)>
             s.split_once(' ')
         })
         .collect();
