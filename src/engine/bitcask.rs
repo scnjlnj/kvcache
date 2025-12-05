@@ -89,7 +89,7 @@ impl Bitcask {
     pub fn iter_entries(&mut self) -> std::io::Result<EntryIter<'_>> {
         EntryIter::new(&mut self.file)
     }
-    fn new(path: PathBuf) -> Result<Self> {
+    pub fn new(path: PathBuf) -> Result<Self> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -209,9 +209,13 @@ impl Bitcask {
         let value_offset = 8 + u32::from_le_bytes(entry[0..4].try_into().unwrap());
         Ok(String::from_utf8_lossy(&entry[value_offset as usize..]).to_string())
     }
+    pub fn get(&mut self, req: GetRequest) -> Option<String> {
+        self.get_mut(req)
+    }
 }
 
-impl Engine for Bitcask {
+impl ReadMutEngine for Bitcask {
+    type Output = String;
     fn del(&mut self, req: DelRequest) -> bool {
         // 插入一条特殊记录标记为已删除
         let delete_marker = String::new().into_bytes(); // 使用空字符串作为删除标记
@@ -228,14 +232,12 @@ impl Engine for Bitcask {
         }
     }
 
-    fn get(&mut self, req: GetRequest) -> Option<String> {
-        // 从索引中查找键的偏移量和长度
+    fn get_mut(&mut self, req: GetRequest) -> Option<String> {
         if let Some(&Location { offset, length }) = self.index.get(&req.key) {
             return self.get_value_from_entry(&req.key, offset, length).ok();
         }
         None
     }
-
     fn put(&mut self, req: PutRequest) -> bool {
         let key_bor = &req.key;
         let Some(value_bor) = &req.value else {

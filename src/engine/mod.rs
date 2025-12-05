@@ -43,17 +43,34 @@ impl DelRequest {
     }
 }
 pub trait Engine: Send {
+    type Output;
+    fn get(&self, req: GetRequest) -> Option<Self::Output>;
+    fn get_mut(&mut self, req: GetRequest) -> Option<Self::Output> {
+        self.get(req)
+    }
     // Put a key-value pair into the repository
     fn put(&mut self, req: PutRequest) -> bool;
 
     // Get a value from the repository using a locator
-    fn get(&mut self, req: GetRequest) -> Option<String>;
-
     // Delete a key-value pair from the repository
     fn del(&mut self, req: DelRequest) -> bool;
     fn iter_all(&self) -> Box<dyn Iterator<Item = (String, (u64, u32))>> {
         Box::new(Vec::<(String, (u64, u32))>::new().into_iter())
     }
 }
+pub trait ReadMutEngine: Send {
+    type Output;
+    // Put a key-value pair into the repository
+    fn put(&mut self, req: PutRequest) -> bool;
 
+    // Get a value from the repository using a locator
+    fn get_mut(&mut self, req: GetRequest) -> Option<Self::Output>;
+    // Delete a key-value pair from the repository
+    fn del(&mut self, req: DelRequest) -> bool;
+    fn iter_all(&self) -> Box<dyn Iterator<Item = (String, (u64, u32))>> {
+        Box::new(Vec::<(String, (u64, u32))>::new().into_iter())
+    }
+}
 pub mod bitcask;
+pub mod btree;
+pub mod hashmap;
